@@ -1,23 +1,35 @@
 #include "oculusgl.h"
 
 int main(int argc, char **argv){
-	glutInit(&argc, argv);
-	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
-	//glutInitWindowSize(renderTargetSize.w, renderTargetSize.h);
-	glutInitWindowSize(800, 600);
-	glutInitWindowPosition(100, 100);
-	glutCreateWindow("sky");
+	
 	if (ovr_Initialize(0)){
 		init(&argc,argv);
+		glfwSetKeyCallback(window, key_callback);
+		while (!glfwWindowShouldClose(window)){
+			glfwPollEvents();
+
+
+
+			glfwSwapBuffers(window);
+		}
 	}
-	glutReshapeFunc(reshape);
-	glutDisplayFunc(display);
-	glutIdleFunc(display);
-	glutMainLoop();
+
+	
 	return 0;
 }
 
 int init(int *argc, char **argv){
+	//create a glfw window
+	glfwSetErrorCallback(error_callback);
+	if (!glfwInit())
+		exit(EXIT_FAILURE);
+	glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
+	if (!(window = glfwCreateWindow(640, 480, "Oculus", NULL, NULL))){
+		glfwTerminate();
+		exit(EXIT_FAILURE);
+	}
+	glfwMakeContextCurrent(window);
+
 	//connect to hmd, or create a virtual DK2
 	if (!(hmd = ovrHmd_Create(0))){
 		fprintf(stderr, "fail to open hmd,falling back to virtual DK2\n");
@@ -45,7 +57,7 @@ int init(int *argc, char **argv){
 	cfg.OGL.Header.BackBufferSize.h = hmd->Resolution.w;
 	cfg.OGL.Header.Multisample = 1;
 	cfg.OGL.DC = wglGetCurrentDC();
-	cfg.OGL.Window = GetActiveWindow();
+	cfg.OGL.Window = glfwGetWin32Window(window);
 
 	//also generates the ovrEyeRenderDescstructure that describes all of the details needed to perform stereo rendering.
 	distortionCaps = ovrDistortionCap_TimeWarp | ovrDistortionCap_Overdrive;
@@ -57,7 +69,7 @@ int init(int *argc, char **argv){
 		printf("running in ExtendDesktop mode\n");
 	}
 	else{
-		ovrHmd_AttachToWindow(hmd, cfg.OGL.Window, 0, 0);
+		ovrHmd_AttachToWindow(hmd, glfwGetWin32Window(window), 0, 0);
 		printf("running in Direct mode\n");
 	}
 
@@ -98,13 +110,17 @@ int init(int *argc, char **argv){
 	else
 		printf("fail to load texture\n");
 
-	system("pause");	
+	//system("pause");	
 	return 1;
 }
 
 void closeHmd(){
+	if (window)
+		glfwDestroyWindow(window);
+	// hmd and LibOVR must be shut down after GLFW
+	glfwTerminate();
 	if (hmd)
-		ovrHmd_Destroy(hmd);
+		ovrHmd_Destroy(hmd);	
 	ovr_Shutdown();
 }
 
@@ -214,10 +230,16 @@ void display(void)
 	glEnd();
 	glDisable(GL_TEXTURE_CUBE_MAP);
 	glColor3f(1.0f, 0.0f, 0.0f);
-	glutWireTeapot(0.5f);
-
-	glutSwapBuffers();
+	
 	glFlush();
+}
+
+void displayteaport(float scale){
+	glMatrixMode(GL_MODELVIEW);
+	glPushMatrix();
+	glTranslatef(0, 0, -10);
+	glutWireTeapot(scale);
+	glPopMatrix();
 }
 
 void reshape(int w, int h){
@@ -228,4 +250,14 @@ void reshape(int w, int h){
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
 	glTranslatef(0.0, 0.0, -3.6);
+}
+
+static void error_callback(int error, const char* description)
+{
+	fputs(description, stderr);
+}
+static void key_callback(GLFWwindow* window1, int key, int scancode, int action, int mods)
+{
+	if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
+		glfwSetWindowShouldClose(window1, GL_TRUE);
 }
